@@ -1,0 +1,30 @@
+{
+  "name": "zeus-trade-app",
+  "version": "1.0.0",
+  "description": "Sistema de Trade Automático Zeus com IQ Option",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "setup": "node create-zeus-app.js",
+    "install-deps": "npm install"
+  },
+  "keywords": ["trade", "automated", "iqoption", "forex", "crypto"],
+  "author": "Zeus Trade Team",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "mysql2": "^3.6.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "axios": "^1.5.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "node-cron": "^3.0.2",
+    "technicalindicators": "^3.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

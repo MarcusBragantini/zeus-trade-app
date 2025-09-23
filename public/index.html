@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zeus Trade App - Dashboard</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status { padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .active { background: #d4edda; color: #155724; }
+        .inactive { background: #f8d7da; color: #721c24; }
+        .trade-win { color: green; }
+        .trade-loss { color: red; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Zeus Trade App - Backend Running</h1>
+        <p>O servidor está funcionando corretamente!</p>
+        
+        <div class="status" id="serverStatus">
+            <strong>Status do Servidor:</strong> <span id="statusText">Conectando...</span>
+        </div>
+        
+        <h2>📊 APIs Disponíveis:</h2>
+        <ul>
+            <li><strong>POST /api/auth/register</strong> - Registrar usuário</li>
+            <li><strong>POST /api/auth/login</strong> - Login</li>
+            <li><strong>POST /api/iqoption/login</strong> - Conectar IQ Option</li>
+            <li><strong>POST /api/trade/start</strong> - Iniciar trading</li>
+            <li><strong>POST /api/trade/stop</strong> - Parar trading</li>
+            <li><strong>GET /api/trade/status</strong> - Status do trading</li>
+        </ul>
+        
+        <h2>🔧 Próximos Passos:</h2>
+        <ol>
+            <li>Configure o banco MySQL no arquivo <code>.env</code></li>
+            <li>Integre com seu frontend usando as APIs acima</li>
+            <li>Teste as estratégias de trading</li>
+            <li>Configure as credenciais da IQ Option</li>
+        </ol>
+        
+        <div id="logs"></div>
+    </div>
+
+    <script>
+        // Testar conexão com o servidor
+        fetch('/api/trade/status')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('statusText').textContent = 'Online ✅';
+                document.getElementById('serverStatus').className = 'status active';
+            })
+            .catch(error => {
+                document.getElementById('statusText').textContent = 'Offline ❌';
+                document.getElementById('serverStatus').className = 'status inactive';
+            });
+    </script>
+</body>
+</html>
