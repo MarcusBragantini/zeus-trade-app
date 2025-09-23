@@ -82,6 +82,20 @@ async function initializeDatabase() {
       )
     `);
     
+    // Tabela de tokens Deriv
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS deriv_tokens (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        demo_token TEXT,
+        real_token TEXT,
+        app_id VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+    
     console.log('✅ Banco de dados inicializado com sucesso');
     
     // Inserir usuário admin padrão se não existir

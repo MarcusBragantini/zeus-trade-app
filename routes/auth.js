@@ -134,6 +134,37 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// Verificar token
+router.get('/verify', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Usuário não encontrado' 
+      });
+    }
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        subscriptionType: user.subscription_type,
+        balance: user.balance
+      }
+    });
+
+  } catch (error) {
+    console.error('Erro ao verificar token:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erro interno do servidor' 
+    });
+  }
+});
+
 // Perfil do usuário
 router.get('/profile', authenticateToken, async (req, res) => {
   try {

@@ -6,7 +6,7 @@
     <title>Zeus - Trade Automático Inteligente</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root {
             --primary: #1a237e;
@@ -288,6 +288,116 @@
             padding: 30px;
             box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
             margin: 30px 0;
+        }
+        
+        /* Switch para seleção de conta */
+        .account-selector {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            gap: 15px;
+        }
+        
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: #2196F3;
+        }
+        
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        
+        .slider.round {
+            border-radius: 34px;
+        }
+        
+        .slider.round:before {
+            border-radius: 50%;
+        }
+        
+        #accountTypeLabel {
+            font-weight: bold;
+            font-size: 16px;
+            color: #333;
+        }
+        
+        .deriv-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+        
+        /* Token Registration Form */
+        .form-text {
+            font-size: 0.875rem;
+            color: #6c757d;
+            margin-top: 0.25rem;
+        }
+        
+        .form-text.text-muted {
+            color: #6c757d;
+        }
+        
+        #tokenRegistrationPanel .form-group {
+            margin-bottom: 20px;
+        }
+        
+        #tokenRegistrationPanel .form-group label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        #tokenRegistrationPanel .form-control {
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+        
+        #tokenRegistrationPanel .form-control:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
         }
         
         .trading-controls {
@@ -765,6 +875,7 @@
             </div>
             <div id="userMenu" style="display: none;">
                 <span id="userName" style="color: white; margin-right: 15px;"></span>
+                <a href="#trading" class="btn btn-primary" style="margin-right: 10px;">Trading</a>
                 <a href="#" class="btn btn-outline" onclick="logout()">Sair</a>
             </div>
         </div>
@@ -823,21 +934,67 @@
                 <p>Controle total sobre suas operações automatizadas</p>
             </div>
 
-            <!-- IQ Option Login -->
-            <div class="trading-panel" id="iqLoginPanel">
-                <h3 style="text-align: center; margin-bottom: 20px;">Conectar à IQ Option</h3>
+            <!-- Token Registration Form -->
+            <div class="trading-panel" id="tokenRegistrationPanel" style="display: none;">
+                <h3 style="text-align: center; margin-bottom: 20px;">🔐 Cadastro de Tokens Deriv</h3>
+                
+                <div style="background: #e8f5e8; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
+                    <p style="margin: 0; color: #2e7d32; font-size: 0.9rem;">
+                        <i class="fas fa-info-circle"></i> 
+                        <strong>Primeiro acesso:</strong> Configure seus tokens da Deriv para começar a fazer trades.
+                    </p>
+                </div>
+                
+                <div class="form-container" style="max-width: 500px; margin: 0 auto;">
+                    <form id="tokenRegistrationForm">
+                        <div class="form-group">
+                            <label for="appId">App ID Deriv</label>
+                            <input type="text" id="appId" class="form-control" required placeholder="Seu App ID da Deriv (ex: 1089)">
+                            <small class="form-text text-muted">O mesmo App ID é usado para ambas as contas</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="demoToken">Token da Conta DEMO</label>
+                            <input type="password" id="demoToken" class="form-control" required placeholder="Token da conta demo da Deriv">
+                            <small class="form-text text-muted">Use para testar sem riscos</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="realToken">Token da Conta REAL</label>
+                            <input type="password" id="realToken" class="form-control" required placeholder="Token da conta real da Deriv">
+                            <small class="form-text text-muted">⚠️ Trades com dinheiro real!</small>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary" style="width: 100%;" id="registerTokensBtn">
+                            💾 Cadastrar Tokens
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Deriv Login -->
+            <div class="trading-panel" id="derivLoginPanel" style="display: none;">
+                <h3 style="text-align: center; margin-bottom: 20px;">Conectar à Deriv</h3>
+                
+                <div style="background: #e8f5e8; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #4caf50;">
+                    <p style="margin: 0; color: #2e7d32; font-size: 0.9rem;">
+                        <i class="fas fa-check-circle"></i> 
+                        <strong>Conexão REAL com Deriv</strong> - O saldo exibido será o saldo real da sua conta Deriv.
+                    </p>
+                </div>
+                
                 <div class="form-container" style="max-width: 400px;">
-                    <form id="iqLoginForm">
+                    <form id="derivLoginForm">
                         <div class="form-group">
-                            <label for="iqEmail">E-mail IQ Option</label>
-                            <input type="email" id="iqEmail" class="form-control" required>
+                            <label for="derivToken">Token de Acesso Deriv</label>
+                            <input type="password" id="derivToken" class="form-control" required placeholder="Seu token de acesso da Deriv">
                         </div>
                         <div class="form-group">
-                            <label for="iqPassword">Senha IQ Option</label>
-                            <input type="password" id="iqPassword" class="form-control" required>
+                            <label for="derivAppId">App ID Deriv</label>
+                            <input type="text" id="derivAppId" class="form-control" required placeholder="Seu App ID da Deriv">
                         </div>
-                        <button type="submit" class="btn btn-primary" style="width: 100%;" id="iqLoginBtn">
-                            Conectar à IQ Option
+                        <button type="submit" class="btn btn-primary" style="width: 100%;" id="derivLoginBtn">
+                            Conectar à Deriv
                         </button>
                     </form>
                 </div>
@@ -847,10 +1004,26 @@
             <div class="trading-panel" id="tradingPanel" style="display: none;">
                 <h3 style="text-align: center; margin-bottom: 20px;">Controles de Trading</h3>
                 
+                <!-- Seleção de Conta -->
+                <div class="account-selector" style="margin-bottom: 30px;">
+                    <label class="switch">
+                        <input type="checkbox" id="accountTypeToggle">
+                        <span class="slider round"></span>
+                    </label>
+                    <span id="accountTypeLabel">Conta DEMO</span>
+                </div>
+                
+                <div id="accountInfo" style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #2196f3;">
+                    <p style="margin: 0; color: #1565c0; font-size: 0.9rem;">
+                        <i class="fas fa-info-circle"></i> 
+                        <strong>Conta DEMO:</strong> Use para testar sem riscos. Saldo virtual de $10,000.
+                    </p>
+                </div>
+                
                 <div class="real-time-data">
                     <div class="data-card">
-                        <div class="data-label">Status IQ Option</div>
-                        <div class="data-value status-active" id="iqStatus">Conectado</div>
+                        <div class="data-label">Status Deriv</div>
+                        <div class="data-value status-active" id="derivStatus">Conectado</div>
                     </div>
                     <div class="data-card">
                         <div class="data-label">Saldo</div>
@@ -868,40 +1041,54 @@
 
                 <div class="trading-controls">
                     <div class="control-group">
-                        <label for="strategySelect">Estratégia</label>
-                        <select id="strategySelect" class="form-control">
-                            <option value="rsi">RSI Strategy</option>
-                            <option value="macd">MACD Strategy</option>
-                            <option value="martingale">Martingale Strategy</option>
+                        <label for="tradeTypeSelect">Tipo de Trade</label>
+                        <select id="tradeTypeSelect" class="form-control" onchange="updateAssetOptions()">
+                            <option value="binary">Opções Binárias</option>
+                            <option value="digital">Opções Digitais</option>
+                            <option value="forex">Forex</option>
+                            <option value="synthetic">Sintéticas</option>
+                            <option value="crypto">Criptomoedas</option>
+                            <option value="commodities">Commodities</option>
+                            <option value="indices">Índices</option>
                         </select>
                     </div>
                     <div class="control-group">
                         <label for="assetSelect">Ativo</label>
                         <select id="assetSelect" class="form-control">
-                            <option value="EURUSD">EUR/USD</option>
-                            <option value="GBPUSD">GBP/USD</option>
-                            <option value="USDJPY">USD/JPY</option>
-                            <option value="BTCUSD">BTC/USD</option>
-                            <option value="ETHUSD">ETH/USD</option>
+                            <!-- Opções serão preenchidas dinamicamente -->
                         </select>
                     </div>
                     <div class="control-group">
-                        <label for="amountInput">Valor por Trade (R$)</label>
-                        <input type="number" id="amountInput" class="form-control" value="10" min="5" max="1000">
+                        <label for="contractTypeSelect">Tipo de Contrato</label>
+                        <select id="contractTypeSelect" class="form-control">
+                            <option value="rise_fall">Rise/Fall</option>
+                            <option value="higher_lower">Higher/Lower</option>
+                            <option value="touch_no_touch">Touch/No Touch</option>
+                            <option value="in_out">In/Out</option>
+                            <option value="digits">Digits</option>
+                        </select>
                     </div>
                     <div class="control-group">
-                        <label for="durationSelect">Duração (minutos)</label>
+                        <label for="amountInput">Valor por Trade</label>
+                        <input type="number" id="amountInput" class="form-control" value="10" min="1" max="10000" step="0.01">
+                    </div>
+                    <div class="control-group">
+                        <label for="durationSelect">Duração</label>
                         <select id="durationSelect" class="form-control">
-                            <option value="1">1 minuto</option>
-                            <option value="5">5 minutos</option>
-                            <option value="15">15 minutos</option>
+                            <option value="10">10 segundos</option>
+                            <option value="30">30 segundos</option>
+                            <option value="60">1 minuto</option>
+                            <option value="300">5 minutos</option>
+                            <option value="900">15 minutos</option>
+                            <option value="1800">30 minutos</option>
+                            <option value="3600">1 hora</option>
                         </select>
                     </div>
                 </div>
 
                 <div class="trading-actions">
                     <button class="btn btn-success" onclick="startTrading()" id="startBtn">
-                        <i class="fas fa-play"></i> Iniciar Trading
+                        <i class="fas fa-play"></i> Executar Trade
                     </button>
                     <button class="btn btn-danger" onclick="stopTrading()" id="stopBtn" disabled>
                         <i class="fas fa-stop"></i> Parar Trading
@@ -1061,4 +1248,1134 @@
         </div>
     </footer>
 
-  
+    <!-- Scripts JavaScript -->
+    <script>
+        // Configurações globais
+        const API_BASE_URL = 'http://localhost:3000/api';
+        let socket = null;
+        let currentUser = null;
+        let isTrading = false;
+        let tradingData = {
+            balance: 0,
+            tradesToday: 0,
+            status: 'disconnected',
+            currency: 'USD',
+            simulated: false,
+            accountType: 'demo'
+        };
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Inicializando aplicação Zeus...');
+            console.log('🌐 API Base URL:', API_BASE_URL);
+            
+            initializeSocket();
+            checkAuthStatus();
+            initializeCharts();
+            setupEventListeners();
+            
+            // Verificar se os elementos existem
+            console.log('🔍 Verificando elementos do DOM...');
+            console.log('📧 Formulário Deriv:', document.getElementById('derivLoginForm'));
+            console.log('🔑 Token Deriv:', document.getElementById('derivToken'));
+            console.log('🆔 App ID Deriv:', document.getElementById('derivAppId'));
+            console.log('🔘 Botão Deriv:', document.getElementById('derivLoginBtn'));
+            
+            // Carregar tokens salvos
+            loadSavedTokens();
+        });
+
+        // Socket.io para atualizações em tempo real
+        function initializeSocket() {
+            // Verificar se Socket.io está disponível
+            if (typeof io === 'undefined') {
+                console.log('⚠️ Socket.io não carregado ainda, tentando novamente em 2 segundos...');
+                setTimeout(initializeSocket, 2000);
+                return;
+            }
+            
+            console.log('🔌 Inicializando Socket.io...');
+            
+            try {
+                socket = io('http://localhost:3000', {
+                    timeout: 5000,
+                    forceNew: true
+                });
+            
+            socket.on('connect', () => {
+                console.log('✅ Conectado ao servidor via Socket.io');
+                showNotification('Conectado ao servidor', 'success');
+                
+                // Entrar na sala do usuário se estiver logado
+                if (currentUser) {
+                    socket.emit('join-user-room', currentUser.id);
+                }
+            });
+
+            socket.on('disconnect', () => {
+                console.log('❌ Desconectado do servidor');
+                showNotification('Desconectado do servidor', 'warning');
+            });
+
+                socket.on('connect_error', (error) => {
+                    console.error('💥 Erro de conexão Socket.io:', error);
+                    showNotification('Erro de conexão com servidor', 'error');
+                });
+
+            socket.on('trading-update', (data) => {
+                console.log('📊 Atualização de trading recebida:', data);
+                updateTradingData(data);
+            });
+
+            socket.on('trade-result', (data) => {
+                console.log('🎯 Resultado de trade recebido:', data);
+                addTradeToTable(data);
+                updateCharts(data);
+            });
+
+            socket.on('balance-update', (data) => {
+                console.log('💰 Atualização de saldo recebida:', data);
+                updateBalance(data.balance);
+            });
+                
+            } catch (error) {
+                console.error('💥 Erro ao inicializar Socket.io:', error);
+                showNotification('Erro ao conectar com servidor', 'error');
+            }
+        }
+
+        // Verificar status de autenticação
+        async function checkAuthStatus() {
+            try {
+                const token = localStorage.getItem('zeus_token');
+                if (token) {
+                    const response = await fetch(`${API_BASE_URL}/auth/verify`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const userData = await response.json();
+                        currentUser = userData.user;
+                        showUserMenu();
+                        
+                        // Se estiver na seção de trading, verificar se precisa cadastrar tokens
+                        if (window.location.hash === '#trading') {
+                            setTimeout(async () => {
+                                if (await checkTokensRegistered()) {
+                                    // Tokens já cadastrados, mostrar tela de trading conectado
+                                    document.getElementById('tradingPanel').style.display = 'block';
+                                    document.getElementById('resultsPanel').style.display = 'block';
+                                    loadTokensInDashboard();
+                                } else {
+                                    // Primeiro acesso, mostrar formulário de cadastro
+                                    document.getElementById('tokenRegistrationPanel').style.display = 'block';
+                                }
+                            }, 500);
+                        }
+                    } else {
+                        localStorage.removeItem('zeus_token');
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao verificar autenticação:', error);
+            }
+        }
+
+        // Configurar event listeners
+        function setupEventListeners() {
+            console.log('🔧 Configurando event listeners...');
+            
+            // Formulário de login
+            const loginForm = document.getElementById('loginFormElement');
+            if (loginForm) {
+                loginForm.addEventListener('submit', handleLogin);
+                console.log('✅ Event listener do login configurado');
+            } else {
+                console.log('❌ Formulário de login não encontrado');
+            }
+            
+            // Formulário de registro
+            const registerForm = document.getElementById('registerFormElement');
+            if (registerForm) {
+                registerForm.addEventListener('submit', handleRegister);
+                console.log('✅ Event listener do registro configurado');
+            } else {
+                console.log('❌ Formulário de registro não encontrado');
+            }
+            
+            // Formulário de Cadastro de Tokens
+            const tokenRegistrationForm = document.getElementById('tokenRegistrationForm');
+            if (tokenRegistrationForm) {
+                tokenRegistrationForm.addEventListener('submit', handleTokenRegistration);
+                console.log('✅ Event listener do cadastro de tokens configurado');
+            } else {
+                console.log('❌ Formulário de cadastro de tokens não encontrado');
+            }
+            
+            // Formulário Deriv
+            const derivForm = document.getElementById('derivLoginForm');
+            if (derivForm) {
+                derivForm.addEventListener('submit', handleDerivLogin);
+                console.log('✅ Event listener do Deriv configurado');
+            } else {
+                console.log('❌ Formulário Deriv não encontrado');
+            }
+            
+            // Switch de tipo de conta
+            const accountToggle = document.getElementById('accountTypeToggle');
+            if (accountToggle) {
+                accountToggle.addEventListener('change', handleAccountTypeChange);
+                console.log('✅ Event listener do switch de conta configurado');
+            }
+            
+            // Botões de ação
+            const saveTokensBtn = document.getElementById('saveTokensBtn');
+            if (saveTokensBtn) {
+                saveTokensBtn.addEventListener('click', handleSaveTokens);
+                console.log('✅ Event listener do botão salvar tokens configurado');
+            }
+            
+            const clearTokensBtn = document.getElementById('clearTokensBtn');
+            if (clearTokensBtn) {
+                clearTokensBtn.addEventListener('click', handleClearTokens);
+                console.log('✅ Event listener do botão limpar tokens configurado');
+            }
+            
+            // Navegação suave
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth' });
+                        
+                        // Se navegando para trading e usuário estiver logado, verificar cadastro de tokens
+                        if (this.getAttribute('href') === '#trading' && currentUser) {
+                            setTimeout(async () => {
+                                if (await checkTokensRegistered()) {
+                                    // Tokens já cadastrados, mostrar tela de trading conectado
+                                    document.getElementById('tradingPanel').style.display = 'block';
+                                    document.getElementById('resultsPanel').style.display = 'block';
+                                    loadTokensInDashboard();
+                                } else {
+                                    // Primeiro acesso, mostrar formulário de cadastro
+                                    document.getElementById('tokenRegistrationPanel').style.display = 'block';
+                                }
+                            }, 500);
+                        }
+                    }
+                });
+            });
+            
+            console.log('🎯 Event listeners configurados com sucesso');
+        }
+
+        // Funções de autenticação
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    localStorage.setItem('zeus_token', data.token);
+                    currentUser = data.user;
+                    showUserMenu();
+                    hideForm('loginForm');
+                    showNotification('Login realizado com sucesso!', 'success');
+                    
+                    // Entrar na sala do usuário
+                    if (socket) {
+                        socket.emit('join-user-room', currentUser.id);
+                    }
+                    
+                    // Scroll para a seção de trading
+                    document.getElementById('trading').scrollIntoView({ behavior: 'smooth' });
+                    
+                    // Verificar se tokens já foram cadastrados
+                    setTimeout(async () => {
+                        if (await checkTokensRegistered()) {
+                            // Tokens já cadastrados, mostrar tela de trading conectado
+                            document.getElementById('tradingPanel').style.display = 'block';
+                            document.getElementById('resultsPanel').style.display = 'block';
+                            loadTokensInDashboard();
+                        } else {
+                            // Primeiro acesso, mostrar formulário de cadastro
+                            document.getElementById('tokenRegistrationPanel').style.display = 'block';
+                        }
+                    }, 500);
+                } else {
+                    showNotification(data.message, 'error');
+                }
+            } catch (error) {
+                showNotification('Erro ao fazer login', 'error');
+            }
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            const name = document.getElementById('registerName').value;
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            const plan = document.getElementById('registerPlan').value;
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, email, password, plan })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification('Conta criada com sucesso!', 'success');
+                    showLogin();
+                } else {
+                    showNotification(data.message, 'error');
+                }
+            } catch (error) {
+                showNotification('Erro ao criar conta', 'error');
+            }
+        }
+
+        // Funções de interface
+        function showLogin() {
+            hideAllForms();
+            document.getElementById('loginForm').style.display = 'block';
+            document.getElementById('loginForm').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function showRegister() {
+            hideAllForms();
+            document.getElementById('registerForm').style.display = 'block';
+            document.getElementById('registerForm').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function hideAllForms() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('registerForm').style.display = 'none';
+        }
+
+        function hideForm(formId) {
+            document.getElementById(formId).style.display = 'none';
+        }
+
+        function showUserMenu() {
+            document.getElementById('authButtons').style.display = 'none';
+            document.getElementById('userMenu').style.display = 'block';
+            document.getElementById('userName').textContent = currentUser.name;
+        }
+
+        function logout() {
+            localStorage.removeItem('zeus_token');
+            currentUser = null;
+            document.getElementById('authButtons').style.display = 'flex';
+            document.getElementById('userMenu').style.display = 'none';
+            
+            // Esconder painéis de trading
+            document.getElementById('tokenRegistrationPanel').style.display = 'none';
+            document.getElementById('derivLoginPanel').style.display = 'none';
+            document.getElementById('tradingPanel').style.display = 'none';
+            document.getElementById('resultsPanel').style.display = 'none';
+            
+            showNotification('Logout realizado', 'success');
+        }
+
+        // Conexão com Deriv
+        async function handleDerivLogin(e) {
+            e.preventDefault();
+            console.log('🚀 Iniciando conexão Deriv...');
+            
+            // Verificar se usuário está logado
+            if (!currentUser) {
+                showNotification('Faça login primeiro para conectar à Deriv', 'warning');
+                showLogin();
+                return;
+            }
+            
+            const toggle = document.getElementById('accountTypeToggle');
+            const isReal = toggle.checked;
+            const accountType = isReal ? 'real' : 'demo';
+            
+            const token = document.getElementById('derivToken').value;
+            const appId = document.getElementById('derivAppId').value;
+            
+            console.log('🔑 Token:', token ? '***' : 'vazia');
+            console.log('🆔 App ID:', appId);
+            console.log('📊 Tipo de conta:', accountType.toUpperCase());
+            
+            if (!token || !appId) {
+                showNotification('Por favor, preencha token e App ID', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('derivLoginBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="loading"></span> Conectando...';
+            btn.disabled = true;
+            
+            try {
+                console.log('🌐 Enviando requisição para:', `${API_BASE_URL}/deriv/login`);
+                
+                const response = await fetch(`${API_BASE_URL}/deriv/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        token, 
+                        appId, 
+                        accountType: accountType,
+                        isReal: isReal 
+                    })
+                });
+                
+                console.log('📡 Resposta recebida:', response.status, response.statusText);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('📊 Dados recebidos:', data);
+                
+                if (data.success) {
+                    tradingData.balance = data.balance;
+                    tradingData.currency = data.currency || 'USD';
+                    tradingData.status = 'connected';
+                    tradingData.simulated = data.simulated || false;
+                    tradingData.accountType = accountType;
+                    updateTradingDisplay();
+                    document.getElementById('derivLoginPanel').style.display = 'none';
+                    document.getElementById('tradingPanel').style.display = 'block';
+                    document.getElementById('resultsPanel').style.display = 'block';
+                    
+                    if (data.simulated) {
+                        showNotification('Conectado em modo SIMULADO!', 'warning');
+                        console.log('⚠️ Conexão Deriv em modo simulado!');
+                    } else {
+                        showNotification(`Conectado à Deriv ${accountType.toUpperCase()}! Saldo: ${data.balance} ${data.currency}`, 'success');
+                        console.log(`✅ Conexão Deriv ${accountType.toUpperCase()} bem-sucedida!`);
+                    }
+                } else {
+                    showNotification(data.message, 'error');
+                    console.log('❌ Falha na conexão:', data.message);
+                }
+            } catch (error) {
+                console.error('💥 Erro na conexão Deriv:', error);
+                showNotification(`Erro ao conectar à Deriv: ${error.message}`, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+        
+        // Gerenciamento de tokens da Deriv
+        let savedTokens = {
+            demo: { token: '', appId: '' },
+            real: { token: '', appId: '' }
+        };
+        
+        // Verificar se tokens já foram cadastrados
+        async function checkTokensRegistered() {
+            if (!currentUser) {
+                return false;
+            }
+            
+            try {
+                // Verificar no banco de dados
+                const response = await fetch(`${API_BASE_URL}/deriv/tokens/${currentUser.id}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('zeus_token')}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('🔍 Verificação de tokens:', data);
+                    
+                    if (data.hasTokens && data.tokens) {
+                        // Salvar tokens no localStorage para uso local
+                        const tokensToSave = {
+                            demo: { token: data.tokens.demo_token, appId: data.tokens.app_id },
+                            real: { token: data.tokens.real_token, appId: data.tokens.app_id }
+                        };
+                        localStorage.setItem('deriv_tokens', JSON.stringify(tokensToSave));
+                        console.log('💾 Tokens carregados do banco para localStorage');
+                    }
+                    
+                    return data.hasTokens;
+                }
+            } catch (error) {
+                console.error('❌ Erro ao verificar tokens no banco:', error);
+            }
+            
+            // Fallback: verificar no localStorage
+            const tokens = localStorage.getItem('deriv_tokens');
+            return tokens && JSON.parse(tokens).demo.token && JSON.parse(tokens).real.token;
+        }
+        
+        // Cadastro de tokens
+        async function handleTokenRegistration(e) {
+            e.preventDefault();
+            console.log('🔐 Iniciando cadastro de tokens...');
+            
+            const appId = document.getElementById('appId').value;
+            const demoToken = document.getElementById('demoToken').value;
+            const realToken = document.getElementById('realToken').value;
+            
+            if (!appId || !demoToken || !realToken) {
+                showNotification('Preencha todos os campos', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('registerTokensBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '🔄 Cadastrando...';
+            btn.disabled = true;
+            
+            try {
+                // Salvar tokens no banco de dados
+                const saveResponse = await fetch(`${API_BASE_URL}/deriv/save-tokens`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('zeus_token')}`
+                    },
+                    body: JSON.stringify({
+                        userId: currentUser.id,
+                        demoToken: demoToken,
+                        realToken: realToken,
+                        appId: appId
+                    })
+                });
+                
+                if (saveResponse.ok) {
+                    // Salvar também no localStorage para uso local
+                    savedTokens = {
+                        demo: { token: demoToken, appId: appId },
+                        real: { token: realToken, appId: appId }
+                    };
+                    
+                    saveTokens();
+                    
+                    showNotification('✅ Tokens cadastrados com sucesso!', 'success');
+                    console.log('💾 Tokens salvos no banco e localStorage:', savedTokens);
+                } else {
+                    throw new Error('Erro ao salvar tokens no banco de dados');
+                }
+                
+                // Esconder formulário de cadastro e mostrar tela de trading
+                document.getElementById('tokenRegistrationPanel').style.display = 'none';
+                document.getElementById('tradingPanel').style.display = 'block';
+                document.getElementById('resultsPanel').style.display = 'block';
+                
+                // Carregar tokens demo por padrão e conectar automaticamente
+                loadTokensInDashboard();
+                
+            } catch (error) {
+                console.error('💥 Erro no cadastro:', error);
+                showNotification('Erro ao cadastrar tokens', 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+        
+        // Carregar tokens no dashboard
+        function loadTokensInDashboard() {
+            const tokens = localStorage.getItem('deriv_tokens');
+            if (tokens) {
+                savedTokens = JSON.parse(tokens);
+                
+                // Garantir que o switch está em DEMO
+                const toggle = document.getElementById('accountTypeToggle');
+                if (toggle) {
+                    toggle.checked = false; // false = DEMO
+                    // Conectar automaticamente à conta demo apenas se não estiver conectado
+                    if (tradingData.status !== 'connected') {
+                        connectToAccount('demo');
+                    } else {
+                        console.log('✅ Já conectado, apenas atualizando interface');
+                        handleAccountTypeChange(); // Apenas atualizar interface
+                    }
+                }
+                
+                console.log('📁 Tokens carregados no dashboard:', savedTokens);
+            }
+        }
+        
+        // Carregar tokens salvos
+        function loadSavedTokens() {
+            const tokens = localStorage.getItem('deriv_tokens');
+            if (tokens) {
+                savedTokens = JSON.parse(tokens);
+                console.log('📁 Tokens carregados:', savedTokens);
+            }
+        }
+        
+        // Salvar tokens
+        function saveTokens() {
+            localStorage.setItem('deriv_tokens', JSON.stringify(savedTokens));
+            console.log('💾 Tokens salvos:', savedTokens);
+        }
+        
+        // Alternar tipo de conta
+        function handleAccountTypeChange() {
+            const toggle = document.getElementById('accountTypeToggle');
+            const label = document.getElementById('accountTypeLabel');
+            const info = document.getElementById('accountInfo');
+            
+            const isReal = toggle.checked;
+            const accountType = isReal ? 'real' : 'demo';
+            
+            // Atualizar label
+            label.textContent = isReal ? 'Conta REAL' : 'Conta DEMO';
+            
+            // Atualizar informações
+            if (isReal) {
+                info.innerHTML = `
+                    <p style="margin: 0; color: #d32f2f; font-size: 0.9rem;">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        <strong>Conta REAL:</strong> Trades serão executados com dinheiro real! Use com cuidado.
+                    </p>
+                `;
+                info.style.background = '#ffebee';
+                info.style.borderLeftColor = '#f44336';
+            } else {
+                info.innerHTML = `
+                    <p style="margin: 0; color: #1565c0; font-size: 0.9rem;">
+                        <i class="fas fa-info-circle"></i> 
+                        <strong>Conta DEMO:</strong> Use para testar sem riscos. Saldo virtual de $10,000.
+                    </p>
+                `;
+                info.style.background = '#e3f2fd';
+                info.style.borderLeftColor = '#2196f3';
+            }
+            
+            // Conectar automaticamente com a nova conta apenas se for diferente
+            if (tradingData.accountType !== accountType) {
+                connectToAccount(accountType);
+            } else {
+                console.log(`✅ Já conectado à conta ${accountType.toUpperCase()}`);
+            }
+            
+            console.log('🔄 Tipo de conta alterado para:', accountType);
+        }
+        
+        // Conectar à conta selecionada
+        async function connectToAccount(accountType) {
+            // Verificar se já está conectado à mesma conta
+            if (tradingData.status === 'connected' && tradingData.accountType === accountType) {
+                console.log(`✅ Já conectado à conta ${accountType.toUpperCase()}`);
+                return;
+            }
+            
+            const tokens = localStorage.getItem('deriv_tokens');
+            if (!tokens) {
+                showNotification('Tokens não encontrados. Faça o cadastro primeiro.', 'error');
+                return;
+            }
+            
+            const parsedTokens = JSON.parse(tokens);
+            const accountTokens = parsedTokens[accountType];
+            
+            if (!accountTokens || !accountTokens.token || !accountTokens.appId) {
+                showNotification(`Tokens da conta ${accountType.toUpperCase()} não encontrados`, 'error');
+                return;
+            }
+            
+            try {
+                console.log(`🔗 Conectando à conta ${accountType.toUpperCase()}...`);
+                
+                const response = await fetch(`${API_BASE_URL}/deriv/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        token: accountTokens.token, 
+                        appId: accountTokens.appId, 
+                        accountType: accountType,
+                        isReal: accountType === 'real'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        tradingData.balance = data.balance;
+                        tradingData.currency = data.currency || 'USD';
+                        tradingData.status = 'connected';
+                        tradingData.simulated = data.simulated || false;
+                        tradingData.accountType = accountType;
+                        updateTradingDisplay();
+                        
+                        showNotification(`✅ Conectado à conta ${accountType.toUpperCase()}! Saldo: ${data.balance} ${data.currency}`, 'success');
+                        console.log(`✅ Conectado à conta ${accountType.toUpperCase()} com sucesso!`);
+                    } else {
+                        showNotification(data.message || 'Falha na conexão', 'error');
+                    }
+                } else {
+                    const errorText = await response.text();
+                    showNotification(`Erro HTTP ${response.status}: ${errorText}`, 'error');
+                }
+            } catch (error) {
+                console.error('💥 Erro na conexão:', error);
+                showNotification(`Erro ao conectar à conta ${accountType.toUpperCase()}: ${error.message}`, 'error');
+            }
+        }
+        
+        // Salvar tokens
+        function handleSaveTokens() {
+            const toggle = document.getElementById('accountTypeToggle');
+            const tokenInput = document.getElementById('derivToken');
+            const appIdInput = document.getElementById('derivAppId');
+            
+            const isReal = toggle.checked;
+            const accountType = isReal ? 'real' : 'demo';
+            
+            if (!tokenInput.value || !appIdInput.value) {
+                showNotification('Preencha token e App ID antes de salvar', 'error');
+                return;
+            }
+            
+            savedTokens[accountType] = {
+                token: tokenInput.value,
+                appId: appIdInput.value
+            };
+            
+            saveTokens();
+            showNotification(`Tokens da conta ${accountType.toUpperCase()} salvos com sucesso!`, 'success');
+            
+            // Mostrar botões de ação
+            document.getElementById('saveTokensBtn').style.display = 'inline-block';
+            document.getElementById('clearTokensBtn').style.display = 'inline-block';
+        }
+        
+        // Limpar tokens
+        function handleClearTokens() {
+            const toggle = document.getElementById('accountTypeToggle');
+            const isReal = toggle.checked;
+            const accountType = isReal ? 'real' : 'demo';
+            
+            if (confirm(`Tem certeza que deseja limpar os tokens da conta ${accountType.toUpperCase()}?`)) {
+                savedTokens[accountType] = { token: '', appId: '' };
+                saveTokens();
+                
+                document.getElementById('derivToken').value = '';
+                document.getElementById('derivAppId').value = '';
+                
+                showNotification(`Tokens da conta ${accountType.toUpperCase()} removidos`, 'success');
+            }
+        }
+
+        // Controles de trading
+        async function startTrading() {
+            if (!currentUser) {
+                showNotification('Faça login primeiro', 'warning');
+                return;
+            }
+
+            if (tradingData.status !== 'connected') {
+                showNotification('Conecte à Deriv primeiro', 'warning');
+                return;
+            }
+
+            const tradeType = document.getElementById('tradeTypeSelect').value;
+            const asset = document.getElementById('assetSelect').value;
+            const contractType = document.getElementById('contractTypeSelect').value;
+            const amount = parseFloat(document.getElementById('amountInput').value);
+            const duration = parseInt(document.getElementById('durationSelect').value);
+            
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            
+            startBtn.innerHTML = '<span class="loading"></span> Iniciando...';
+            startBtn.disabled = true;
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/deriv/trade`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('zeus_token')}`
+                    },
+                    body: JSON.stringify({
+                        tradeType,
+                        asset,
+                        contractType,
+                        amount,
+                        duration,
+                        userId: currentUser.id
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    isTrading = true;
+                    tradingData.status = 'trading';
+                    updateTradingDisplay();
+                    startBtn.disabled = true;
+                    stopBtn.disabled = false;
+                    showNotification('Trade executado com sucesso!', 'success');
+                } else {
+                    showNotification(data.message, 'error');
+                }
+            } catch (error) {
+                showNotification('Erro ao executar trade', 'error');
+            } finally {
+                startBtn.innerHTML = '<i class="fas fa-play"></i> Executar Trade';
+                startBtn.disabled = false;
+            }
+        }
+
+        async function stopTrading() {
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            
+            stopBtn.innerHTML = '<span class="loading"></span> Parando...';
+            stopBtn.disabled = true;
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/trade/stop`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('zeus_token')}`
+                    },
+                    body: JSON.stringify({
+                        userId: currentUser.id
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    isTrading = false;
+                    tradingData.status = 'stopped';
+                    updateTradingDisplay();
+                    startBtn.disabled = false;
+                    stopBtn.disabled = true;
+                    showNotification('Trading parado!', 'success');
+                } else {
+                    showNotification(data.message, 'error');
+                }
+            } catch (error) {
+                showNotification('Erro ao parar trading', 'error');
+            } finally {
+                stopBtn.innerHTML = '<i class="fas fa-stop"></i> Parar Trading';
+                stopBtn.disabled = false;
+            }
+        }
+
+        // Atualizar dados de trading
+        function updateTradingData(data) {
+            if (data.balance !== undefined) tradingData.balance = data.balance;
+            if (data.tradesToday !== undefined) tradingData.tradesToday = data.tradesToday;
+            if (data.status !== undefined) tradingData.status = data.status;
+            
+            updateTradingDisplay();
+        }
+
+        function updateTradingDisplay() {
+            // Atualizar status Deriv
+            const derivStatus = document.getElementById('derivStatus');
+            if (tradingData.status === 'connected' || tradingData.status === 'trading') {
+                if (tradingData.simulated) {
+                    derivStatus.textContent = 'Simulado';
+                    derivStatus.className = 'data-value status-pending';
+            } else {
+                    const accountType = tradingData.accountType || 'real';
+                    derivStatus.textContent = `Conectado (${accountType.toUpperCase()})`;
+                    derivStatus.className = 'data-value status-active';
+                }
+            } else {
+                derivStatus.textContent = 'Desconectado';
+                derivStatus.className = 'data-value status-inactive';
+            }
+            
+            // Atualizar saldo
+            const currency = tradingData.currency || 'USD';
+            const formattedBalance = new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: currency
+            }).format(tradingData.balance);
+            document.getElementById('balance').textContent = formattedBalance;
+            
+            // Atualizar status trading
+            const tradingStatus = document.getElementById('tradingStatus');
+            if (tradingData.status === 'trading') {
+                tradingStatus.textContent = 'Ativo';
+                tradingStatus.className = 'data-value status-active';
+            } else {
+                tradingStatus.textContent = 'Parado';
+                tradingStatus.className = 'data-value status-inactive';
+            }
+            
+            // Atualizar trades hoje
+            document.getElementById('tradesToday').textContent = tradingData.tradesToday;
+        }
+
+        function updateBalance(balance) {
+            tradingData.balance = balance;
+            // Formatar saldo na moeda correta
+            const currency = tradingData.currency || 'USD';
+            const formattedBalance = new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: currency
+            }).format(balance);
+            document.getElementById('balance').textContent = formattedBalance;
+            console.log('💰 Saldo atualizado:', formattedBalance);
+        }
+
+        // Adicionar trade à tabela
+        function addTradeToTable(trade) {
+            const tbody = document.getElementById('tradesList');
+            const row = document.createElement('tr');
+            
+            const resultClass = trade.result === 'win' ? 'positive' : 'negative';
+            const resultText = trade.result === 'win' ? 'Ganhou' : 'Perdeu';
+            
+            const formattedAmount = new Intl.NumberFormat('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            }).format(trade.amount);
+            
+            row.innerHTML = `
+                <td>${new Date(trade.timestamp).toLocaleTimeString()}</td>
+                <td>${trade.asset}</td>
+                <td>${trade.direction}</td>
+                <td>${formattedAmount}</td>
+                <td class="${resultClass}">${resultText}</td>
+            `;
+            
+            tbody.insertBefore(row, tbody.firstChild);
+            
+            // Manter apenas os últimos 20 trades
+            while (tbody.children.length > 20) {
+                tbody.removeChild(tbody.lastChild);
+            }
+        }
+
+        // Gráficos
+        let balanceChart, resultsChart;
+
+        function initializeCharts() {
+            // Gráfico de evolução do saldo
+            const balanceCtx = document.getElementById('balanceChart').getContext('2d');
+            balanceChart = new Chart(balanceCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Saldo (R$)',
+                        data: [],
+                        borderColor: '#4caf50',
+                        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: false
+                        }
+                    }
+                }
+            });
+
+            // Gráfico de distribuição de resultados
+            const resultsCtx = document.getElementById('resultsChart').getContext('2d');
+            resultsChart = new Chart(resultsCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Ganhos', 'Perdas'],
+                    datasets: [{
+                        data: [0, 0],
+                        backgroundColor: ['#4caf50', '#f44336']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        function updateCharts(tradeData) {
+            // Atualizar gráfico de saldo
+            const now = new Date().toLocaleTimeString();
+            balanceChart.data.labels.push(now);
+            balanceChart.data.datasets[0].data.push(tradingData.balance);
+            
+            // Manter apenas os últimos 20 pontos
+            if (balanceChart.data.labels.length > 20) {
+                balanceChart.data.labels.shift();
+                balanceChart.data.datasets[0].data.shift();
+            }
+            
+            balanceChart.update();
+
+            // Atualizar gráfico de resultados (simulado)
+            const wins = Math.floor(Math.random() * 10) + 5;
+            const losses = Math.floor(Math.random() * 5) + 2;
+            resultsChart.data.datasets[0].data = [wins, losses];
+            resultsChart.update();
+        }
+
+        // Notificações
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+
+        // Simulação de dados em tempo real (para demonstração)
+        function startDataSimulation() {
+            setInterval(() => {
+                if (tradingData.status === 'trading') {
+                    // Simular mudanças no saldo
+                    const change = (Math.random() - 0.5) * 50;
+                    tradingData.balance += change;
+                    updateBalance(tradingData.balance);
+                    
+                    // Simular trade ocasional
+                    if (Math.random() < 0.1) {
+                        const trade = {
+                            timestamp: new Date(),
+                            asset: document.getElementById('assetSelect').value,
+                            direction: Math.random() > 0.5 ? 'RISE' : 'FALL',
+                            amount: parseFloat(document.getElementById('amountInput').value),
+                            result: Math.random() > 0.4 ? 'win' : 'lose'
+                        };
+                        
+                        addTradeToTable(trade);
+                        updateCharts(trade);
+                        tradingData.tradesToday++;
+                        updateTradingDisplay();
+                    }
+                }
+            }, 2000);
+        }
+
+        // Iniciar simulação quando a página carregar
+        setTimeout(startDataSimulation, 1000);
+
+        // Atualizar opções de ativos baseado no tipo de trade
+        function updateAssetOptions() {
+            const tradeType = document.getElementById('tradeTypeSelect').value;
+            const assetSelect = document.getElementById('assetSelect');
+            
+            // Limpar opções existentes
+            assetSelect.innerHTML = '';
+            
+            let assets = [];
+            
+            switch(tradeType) {
+                case 'binary':
+                    assets = [
+                        { value: 'R_10', text: 'Rise/Fall (10 ticks)' },
+                        { value: 'R_25', text: 'Higher/Lower (25 ticks)' },
+                        { value: 'R_50', text: 'Touch/No Touch (50 ticks)' },
+                        { value: 'R_100', text: 'In/Out (100 ticks)' },
+                        { value: 'R_500', text: 'Digits (500 ticks)' }
+                    ];
+                    break;
+                case 'digital':
+                    assets = [
+                        { value: '1HZ100V', text: 'Volatility 100 (1s)' },
+                        { value: '1HZ150V', text: 'Volatility 150 (1s)' },
+                        { value: '1HZ200V', text: 'Volatility 200 (1s)' },
+                        { value: '1HZ250V', text: 'Volatility 250 (1s)' },
+                        { value: '1HZ300V', text: 'Volatility 300 (1s)' }
+                    ];
+                    break;
+                case 'forex':
+                    assets = [
+                        { value: 'frxAUDUSD', text: 'AUD/USD' },
+                        { value: 'frxEURUSD', text: 'EUR/USD' },
+                        { value: 'frxGBPUSD', text: 'GBP/USD' },
+                        { value: 'frxUSDJPY', text: 'USD/JPY' },
+                        { value: 'frxUSDCAD', text: 'USD/CAD' },
+                        { value: 'frxUSDCHF', text: 'USD/CHF' },
+                        { value: 'frxNZDUSD', text: 'NZD/USD' }
+                    ];
+                    break;
+                case 'synthetic':
+                    assets = [
+                        { value: '1HZ10V', text: 'Volatility 10 (1s)' },
+                        { value: '1HZ25V', text: 'Volatility 25 (1s)' },
+                        { value: '1HZ50V', text: 'Volatility 50 (1s)' },
+                        { value: '1HZ75V', text: 'Volatility 75 (1s)' },
+                        { value: '1HZ100V', text: 'Volatility 100 (1s)' }
+                    ];
+                    break;
+                case 'crypto':
+                    assets = [
+                        { value: 'cryBTCUSD', text: 'BTC/USD' },
+                        { value: 'cryETHUSD', text: 'ETH/USD' },
+                        { value: 'cryLTCUSD', text: 'LTC/USD' },
+                        { value: 'cryXRPUSD', text: 'XRP/USD' },
+                        { value: 'cryADAUSD', text: 'ADA/USD' },
+                        { value: 'cryDOTUSD', text: 'DOT/USD' }
+                    ];
+                    break;
+                case 'commodities':
+                    assets = [
+                        { value: 'frxGOLD', text: 'Ouro' },
+                        { value: 'frxSILVER', text: 'Prata' },
+                        { value: 'frxOIL', text: 'Petróleo' },
+                        { value: 'frxGAS', text: 'Gás Natural' }
+                    ];
+                    break;
+                case 'indices':
+                    assets = [
+                        { value: 'R_50', text: 'Volatility 50' },
+                        { value: 'R_75', text: 'Volatility 75' },
+                        { value: 'R_100', text: 'Volatility 100' },
+                        { value: 'R_150', text: 'Volatility 150' },
+                        { value: 'R_200', text: 'Volatility 200' }
+                    ];
+                    break;
+            }
+            
+            // Adicionar opções ao select
+            assets.forEach(asset => {
+                const option = document.createElement('option');
+                option.value = asset.value;
+                option.textContent = asset.text;
+                assetSelect.appendChild(option);
+            });
+        }
+
+        // Inicializar opções de ativos
+        updateAssetOptions();
+    </script>
+   
