@@ -24,8 +24,13 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/trade', require('./routes/trade'));
 app.use('/api/admin', require('./routes/admin'));
 
-// Servir frontend
+// Servir frontend - Interface profissional
 app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'zeus-pro.html'));
+});
+
+// Rota para interface antiga (backup)
+app.get('/old', (req, res) => {
   res.sendFile(path.join(__dirname, 'zeus.html'));
 });
 
@@ -215,6 +220,11 @@ app.post('/api/deriv/save-tokens', async (req, res) => {
     console.log('🆔 App ID:', appId);
     
     if (!userId || !demoToken || !realToken || !appId) {
+      console.log('❌ Campos obrigatórios faltando:');
+      console.log('  - userId:', userId);
+      console.log('  - demoToken:', demoToken ? '***' : 'vazio');
+      console.log('  - realToken:', realToken ? '***' : 'vazio');
+      console.log('  - appId:', appId);
       return res.status(400).json({ 
         success: false, 
         message: 'Todos os campos são obrigatórios' 
@@ -333,6 +343,34 @@ app.post('/api/deriv/login', async (req, res) => {
 });
 
 // Rota para executar trades na Deriv
+// Rota para buscar pares forex disponíveis
+app.get('/api/deriv/forex-pairs', async (req, res) => {
+  try {
+    console.log('🔍 Buscando pares forex disponíveis...');
+    
+    if (!globalDerivService || !globalDerivService.isConnected) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Não conectado à Deriv. Faça login primeiro.' 
+      });
+    }
+    
+    const forexPairs = await globalDerivService.getAvailableForexPairs();
+    
+    res.json({ 
+      success: true, 
+      pairs: forexPairs,
+      message: `${forexPairs.length} pares forex encontrados`
+    });
+  } catch (error) {
+    console.error('💥 Erro ao buscar pares forex:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Erro ao buscar pares forex: ' + error.message 
+    });
+  }
+});
+
 app.post('/api/deriv/trade', async (req, res) => {
   try {
     console.log('🔗 Recebida requisição de trade Deriv');
@@ -349,7 +387,21 @@ app.post('/api/deriv/trade', async (req, res) => {
     }
     
     // Verificar se há instância conectada
-    if (!globalDerivService || !globalDerivService.isConnected) {
+    if (!globalDerivService) {
+      console.log('❌ DerivService não existe');
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Não conectado à Deriv. Faça login primeiro.' 
+      });
+    }
+    
+    console.log('🔍 Verificando conexão Deriv...');
+    const status = globalDerivService.getStatus();
+    console.log('📊 Status:', status);
+    
+    // Verificar se está conectado (usar tanto 'connected' quanto 'isConnected')
+    const isConnected = status.connected || status.isConnected;
+    if (!isConnected) {
       console.log('❌ DerivService não está conectado');
       return res.status(400).json({ 
         success: false, 
@@ -364,10 +416,14 @@ app.post('/api/deriv/trade', async (req, res) => {
     
     if (tradeResult.success) {
       console.log('✅ Trade Deriv executado com sucesso');
+      console.log('💰 Retornando saldo atualizado:', tradeResult.balance, tradeResult.currency);
+      console.log('📊 TradeResult completo:', JSON.stringify(tradeResult, null, 2));
       res.json({ 
         success: true, 
         message: 'Trade executado com sucesso',
-        trade: tradeResult
+        balance: tradeResult.balance || globalDerivService.balance,
+        currency: tradeResult.currency || globalDerivService.currency,
+        trade: tradeResult.trade
       });
     } else {
       console.log('❌ Falha no trade Deriv:', tradeResult.message);

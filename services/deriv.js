@@ -7,6 +7,7 @@ class DerivService extends EventEmitter {
     this.io = io;
     this.isConnected = false;
     this.balance = 0;
+    this.currency = 'USD';
     this.token = null;
     this.appId = null;
     this.ws = null;
@@ -133,7 +134,8 @@ class DerivService extends EventEmitter {
                 
                 // O saldo já vem na resposta de autorização
                 const balance = parseFloat(response.authorize.balance);
-                const currency = response.authorize.currency;
+                const currency = response.authorize.currency || 'USD';
+                this.currency = currency;
                 console.log('💰 Saldo da autorização:', balance, currency);
                 
                 resolve({
@@ -164,7 +166,15 @@ class DerivService extends EventEmitter {
 
         this.ws.on('close', () => {
           console.log('🔌 WebSocket fechado');
+          this.isConnected = false;
           clearTimeout(connectionTimeout);
+          this.emit('disconnected');
+        });
+        
+        this.ws.on('error', (error) => {
+          console.error('❌ Erro no WebSocket:', error);
+          this.isConnected = false;
+          this.emit('error', error);
         });
 
       } catch (error) {
@@ -277,7 +287,7 @@ class DerivService extends EventEmitter {
     }
   }
 
-  async executeRealTrade(asset, contractType, amount, duration) {
+  async getAvailableDurations(asset) {
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         reject(new Error('WebSocket não está conectado'));
@@ -286,37 +296,313 @@ class DerivService extends EventEmitter {
 
       const reqId = this.requestId++;
       
-      // Ajustar duração para ativos sintéticos
-      let validDuration = duration;
-      let validDurationUnit = 's';
-      
-      if (asset.startsWith('R_') || asset.startsWith('1HZ')) {
-        if (duration < 15) {
-          validDuration = 15; // Mínimo 15 segundos para sintéticos
-          console.log(`⚠️ Duração ajustada para ${validDuration}s para ativo sintético.`);
-        }
-      }
-
-      // Criar requisição de trade
-      const tradeRequest = {
-        buy: 1,
-        price: amount,
-        parameters: {
-          symbol: asset,
-          contract_type: 'CALL', // Usar CALL em vez de rise_fall
-          duration: validDuration,
-          duration_unit: validDurationUnit,
-          currency: 'USD', // Adicionar currency obrigatório
-          basis: 'stake',    // ✅ Especifica que o valor é stake
-          amount: amount     // ✅ Valor do stake
-        },
+      const request = {
+        trading_times: 1,
         req_id: reqId
       };
 
-      console.log('📤 Enviando requisição:', tradeRequest);
-      this.ws.send(JSON.stringify(tradeRequest));
+      console.log('🔍 Consultando durações disponíveis para:', asset);
+      this.ws.send(JSON.stringify(request));
 
-      // Timeout de 30 segundos
+      const timeout = setTimeout(() => {
+        this.ws.removeListener('message', messageHandler);
+        // Fallback para durações padrão
+        const defaultDurations = this.getDefaultDurations(asset);
+        console.log('⏰ Timeout na consulta, usando durações padrão:', defaultDurations);
+        resolve(defaultDurations);
+      }, 5000);
+
+      const messageHandler = (data) => {
+        try {
+          const response = JSON.parse(data);
+          if (response.msg_type === 'trading_times' && response.req_id === reqId) {
+            clearTimeout(timeout);
+            this.ws.removeListener('message', messageHandler);
+            
+            const durations = this.parseAvailableDurations(response, asset);
+            console.log('✅ Durações disponíveis para', asset, ':', durations);
+            resolve(durations);
+          }
+        } catch (error) {
+          console.error('❌ Erro ao processar resposta de durações:', error);
+        }
+      };
+
+      this.ws.on('message', messageHandler);
+    });
+  }
+
+  getDefaultDurations(asset) {
+    if (asset.startsWith('R_') || asset.startsWith('1HZ')) {
+      return [15, 30, 60, 120, 300, 600, 900, 1800, 3600]; // Sintéticos
+    } else if (asset.startsWith('frx')) {
+      return [300, 600, 900, 1800, 3600, 7200, 14400, 28800, 86400]; // Forex - durações maiores
+    } else if (asset.startsWith('cry')) {
+      return [300, 600, 900, 1800, 3600, 7200, 14400, 28800, 86400]; // Crypto - durações maiores
+    } else if (asset.startsWith('ind')) {
+      return [300, 600, 900, 1800, 3600, 7200, 14400, 28800, 86400]; // Índices - durações maiores
+    } else {
+      return [300, 600, 900, 1800, 3600, 7200, 14400, 28800, 86400]; // Padrão - durações maiores
+    }
+  }
+
+  // Lista de ativos que sabemos que funcionam
+  async getAvailableForexPairs() {
+    return new Promise((resolve, reject) => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        reject(new Error('WebSocket não está conectado'));
+        return;
+      }
+
+      const reqId = this.requestId++;
+      
+      const request = {
+        active_symbols: 1,
+        product_type: 'basic',
+        req_id: reqId
+      };
+
+      console.log('🔍 Consultando pares forex disponíveis...');
+      this.ws.send(JSON.stringify(request));
+
+      const timeout = setTimeout(() => {
+        this.ws.removeListener('message', messageHandler);
+        // Fallback para pares forex conhecidos
+        const fallbackPairs = [
+          'frxEURUSD', 'frxGBPUSD', 'frxUSDJPY', 'frxAUDUSD', 
+          'frxUSDCAD', 'frxUSDCHF', 'frxNZDUSD', 'frxEURGBP',
+          'frxEURJPY', 'frxGBPJPY', 'frxAUDCAD', 'frxAUDCHF'
+        ];
+        console.log('⏰ Timeout na consulta, usando pares padrão:', fallbackPairs);
+        resolve(fallbackPairs);
+      }, 5000);
+
+      const messageHandler = (data) => {
+        try {
+          const response = JSON.parse(data);
+          if (response.msg_type === 'active_symbols' && response.req_id === reqId) {
+            clearTimeout(timeout);
+            this.ws.removeListener('message', messageHandler);
+            
+            const forexPairs = this.parseForexPairs(response);
+            console.log('✅ Pares forex disponíveis:', forexPairs);
+            resolve(forexPairs);
+          }
+        } catch (error) {
+          console.error('❌ Erro ao processar resposta de pares:', error);
+        }
+      };
+
+      this.ws.on('message', messageHandler);
+    });
+  }
+
+  parseForexPairs(response) {
+    try {
+      if (response.active_symbols) {
+        const forexPairs = response.active_symbols
+          .filter(symbol => symbol.symbol.startsWith('frx'))
+          .map(symbol => symbol.symbol)
+          .sort();
+        
+        if (forexPairs.length > 0) {
+          return forexPairs;
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erro ao analisar pares forex:', error);
+    }
+    
+    // Fallback
+    return [
+      'frxEURUSD', 'frxGBPUSD', 'frxUSDJPY', 'frxAUDUSD', 
+      'frxUSDCAD', 'frxUSDCHF', 'frxNZDUSD', 'frxEURGBP',
+      'frxEURJPY', 'frxGBPJPY', 'frxAUDCAD', 'frxAUDCHF'
+    ];
+  }
+
+  getWorkingAssets() {
+    return {
+      forex: ['frxEURUSD', 'frxGBPUSD', 'frxUSDJPY', 'frxAUDUSD', 'frxUSDCAD', 'frxUSDCHF', 'frxNZDUSD']
+    };
+  }
+
+  parseAvailableDurations(response, asset) {
+    try {
+      if (response.trading_times && response.trading_times[asset]) {
+        const marketData = response.trading_times[asset];
+        const durations = [];
+        
+        // Extrair durações disponíveis (implementação simplificada)
+        // A Deriv API retorna informações complexas, vamos usar durações padrão por enquanto
+        return this.getDefaultDurations(asset);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao analisar durações:', error);
+    }
+    
+    return this.getDefaultDurations(asset);
+  }
+
+  async getValidDurationsForAsset(asset) {
+    try {
+      console.log(`🔍 Buscando durações válidas para: ${asset}`);
+      
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        throw new Error('WebSocket não conectado');
+      }
+
+      return new Promise((resolve, reject) => {
+        const reqId = Date.now();
+        
+        const request = {
+          contracts_for: asset,
+          req_id: reqId
+        };
+
+        console.log(`📤 Enviando requisição de contratos:`, request);
+        this.ws.send(JSON.stringify(request));
+
+        const timeout = setTimeout(() => {
+          reject(new Error('Timeout ao buscar durações'));
+        }, 10000);
+
+        const messageHandler = (data) => {
+          try {
+            const response = JSON.parse(data);
+            console.log(`📨 Resposta de contratos:`, response);
+
+            if (response.req_id === reqId) {
+              clearTimeout(timeout);
+              this.ws.removeListener('message', messageHandler);
+
+              if (response.error) {
+                reject(new Error(response.error.message));
+                return;
+              }
+
+              if (response.contracts_for && response.contracts_for.available) {
+                const contracts = response.contracts_for.available;
+                const durations = contracts
+                  .filter(contract => contract.contract_type === 'CALL' || contract.contract_type === 'PUT')
+                  .map(contract => {
+                    // Converter duração de string para inteiro
+                    let duration = contract.min_contract_duration;
+                    let duration_unit = contract.duration_unit || 's';
+                    
+                    // Se a duração é uma string como '15m', '1d', etc.
+                    if (typeof duration === 'string') {
+                      if (duration.endsWith('m')) {
+                        duration = parseInt(duration.replace('m', '')) * 60; // minutos para segundos
+                        duration_unit = 's';
+                      } else if (duration.endsWith('h')) {
+                        duration = parseInt(duration.replace('h', '')) * 3600; // horas para segundos
+                        duration_unit = 's';
+                      } else if (duration.endsWith('d')) {
+                        duration = parseInt(duration.replace('d', '')) * 86400; // dias para segundos
+                        duration_unit = 's';
+                      } else {
+                        duration = parseInt(duration) || 300; // fallback para 5 minutos
+                      }
+                    }
+                    
+                    return {
+                      duration: duration,
+                      duration_unit: duration_unit
+                    };
+                  })
+                  .filter((duration, index, self) => 
+                    index === self.findIndex(d => d.duration === duration.duration)
+                  )
+                  .sort((a, b) => a.duration - b.duration);
+
+                console.log(`✅ Durações válidas encontradas:`, durations);
+                resolve(durations);
+              } else {
+                // Fallback para durações padrão
+                resolve([
+                  { duration: 300, duration_unit: 's' },
+                  { duration: 600, duration_unit: 's' },
+                  { duration: 900, duration_unit: 's' },
+                  { duration: 1800, duration_unit: 's' },
+                  { duration: 3600, duration_unit: 's' }
+                ]);
+              }
+            }
+          } catch (error) {
+            console.error('❌ Erro ao processar resposta de contratos:', error);
+          }
+        };
+
+        this.ws.on('message', messageHandler);
+      });
+    } catch (error) {
+      console.error('❌ Erro ao buscar durações válidas:', error);
+      // Retornar durações padrão em caso de erro
+      return [
+        { duration: 300, duration_unit: 's' },
+        { duration: 600, duration_unit: 's' },
+        { duration: 900, duration_unit: 's' },
+        { duration: 1800, duration_unit: 's' },
+        { duration: 3600, duration_unit: 's' }
+      ];
+    }
+  }
+
+  async executeRealTrade(asset, contractType, amount, duration) {
+    return new Promise(async (resolve, reject) => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        reject(new Error('WebSocket não está conectado'));
+        return;
+      }
+
+      const reqId = this.requestId++;
+      
+      try {
+        // Buscar durações válidas para o ativo
+        let validDuration = 900; // 15 minutos como padrão
+        let validDurationUnit = 's';
+        
+        try {
+          const validDurations = await this.getValidDurationsForAsset(asset);
+          if (validDurations && validDurations.length > 0) {
+            // Usar a primeira duração válida (menor)
+            validDuration = validDurations[0].duration;
+            validDurationUnit = validDurations[0].duration_unit || 's';
+            console.log(`✅ Usando duração válida: ${validDuration}${validDurationUnit}`);
+          } else {
+            console.log(`⚠️ Duração ajustada para máxima disponível: ${validDuration}${validDurationUnit}`);
+          }
+        } catch (error) {
+          console.log(`⚠️ Erro ao buscar durações, usando padrão: ${validDuration}${validDurationUnit}`);
+        }
+
+        // Usar o tipo de contrato fornecido pelo frontend (CALL/PUT são válidos)
+        let finalContractType = contractType;
+        console.log(`🔄 Usando tipo de contrato: ${finalContractType}`);
+        
+        // Criar requisição de trade
+        const tradeRequest = {
+          buy: 1,
+          price: amount,
+          parameters: {
+            symbol: asset,
+            contract_type: finalContractType,
+            duration: validDuration,
+            duration_unit: validDurationUnit,
+            currency: 'USD',
+            basis: 'stake',
+            amount: amount
+          },
+          req_id: reqId
+        };
+      
+        console.log('📤 Enviando requisição de trade:', JSON.stringify(tradeRequest, null, 2));
+
+        console.log('📤 Enviando requisição:', tradeRequest);
+        this.ws.send(JSON.stringify(tradeRequest));
+
+        // Timeout de 30 segundos
       const timeout = setTimeout(() => {
         this.ws.removeListener('message', messageHandler);
         reject(new Error('Timeout na execução do trade'));
@@ -343,16 +629,23 @@ class DerivService extends EventEmitter {
               const currency = response.buy.currency;
               const tradeTime = new Date().toISOString();
               
+              // Atualizar saldo após trade
+              this.balance = balanceAfter;
+              
               console.log('✅ Trade executado, ID do contrato:', contractId);
+              console.log('💰 Saldo atualizado:', this.balance, this.currency || 'USD');
+              
               resolve({
                 success: true,
                 message: 'Trade executado com sucesso',
+                balance: this.balance,
+                currency: this.currency || 'USD',
                 trade: {
                   contractId,
                   buyPrice,
                   payout,
                   balanceAfter,
-                  currency,
+                  currency: this.currency || 'USD',
                   tradeTime,
                   asset,
                   contractType,
@@ -372,7 +665,11 @@ class DerivService extends EventEmitter {
         }
       };
 
-      this.ws.on('message', messageHandler);
+        this.ws.on('message', messageHandler);
+      } catch (error) {
+        console.error('❌ Erro ao executar trade:', error);
+        reject(error);
+      }
     });
   }
 
@@ -469,9 +766,16 @@ class DerivService extends EventEmitter {
   }
 
   getStatus() {
+    const wsConnected = this.ws && this.ws.readyState === WebSocket.OPEN;
+    const isConnected = this.isConnected && wsConnected;
+    
     return {
-      connected: this.isConnected,
+      connected: isConnected,
+      isConnected: isConnected,
+      wsExists: !!this.ws,
+      wsState: this.ws ? this.ws.readyState : -1,
       balance: this.balance,
+      currency: this.currency,
       token: this.token ? '***' : null,
       appId: this.appId
     };

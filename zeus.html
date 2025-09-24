@@ -467,6 +467,11 @@
             color: var(--danger);
         }
         
+        .pending {
+            color: #ffc107;
+            font-weight: bold;
+        }
+        
         /* Plans Section */
         .plans-grid {
             display: grid;
@@ -848,6 +853,59 @@
                 grid-template-columns: 1fr;
             }
         }
+        
+        /* Indicador de Status de Conexão */
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 10px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #dc3545;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator.connected {
+            background: #28a745;
+        }
+        
+        .status-indicator.connecting {
+            background: #ffc107;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        /* Melhorias de UX */
+        .trading-panel {
+            transition: all 0.3s ease;
+        }
+        
+        .trading-panel.loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .form-control:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        }
     </style>
 </head>
 <body>
@@ -874,6 +932,10 @@
                 <a href="#" class="btn btn-primary" onclick="showRegister()">Cadastre-se</a>
             </div>
             <div id="userMenu" style="display: none;">
+                <div class="connection-status" id="connectionStatus" style="display: none; margin-right: 15px;">
+                    <div class="status-indicator" id="statusIndicator"></div>
+                    <span id="statusText" style="color: white; font-size: 12px;">Desconectado</span>
+                </div>
                 <span id="userName" style="color: white; margin-right: 15px;"></span>
                 <a href="#trading" class="btn btn-primary" style="margin-right: 10px;">Trading</a>
                 <a href="#" class="btn btn-outline" onclick="logout()">Sair</a>
@@ -1043,13 +1105,7 @@
                     <div class="control-group">
                         <label for="tradeTypeSelect">Tipo de Trade</label>
                         <select id="tradeTypeSelect" class="form-control" onchange="updateAssetOptions()">
-                            <option value="binary">Opções Binárias</option>
-                            <option value="digital">Opções Digitais</option>
                             <option value="forex">Forex</option>
-                            <option value="synthetic">Sintéticas</option>
-                            <option value="crypto">Criptomoedas</option>
-                            <option value="commodities">Commodities</option>
-                            <option value="indices">Índices</option>
                         </select>
                     </div>
                     <div class="control-group">
@@ -1059,13 +1115,9 @@
                         </select>
                     </div>
                     <div class="control-group">
-                        <label for="contractTypeSelect">Tipo de Contrato</label>
+                        <label for="contractTypeSelect">Direção</label>
                         <select id="contractTypeSelect" class="form-control">
-                            <option value="rise_fall">Rise/Fall</option>
-                            <option value="higher_lower">Higher/Lower</option>
-                            <option value="touch_no_touch">Touch/No Touch</option>
-                            <option value="in_out">In/Out</option>
-                            <option value="digits">Digits</option>
+                            <option value="RISE_FALL">Alta/Baixa</option>
                         </select>
                     </div>
                     <div class="control-group">
@@ -1075,13 +1127,15 @@
                     <div class="control-group">
                         <label for="durationSelect">Duração</label>
                         <select id="durationSelect" class="form-control">
-                            <option value="10">10 segundos</option>
-                            <option value="30">30 segundos</option>
-                            <option value="60">1 minuto</option>
                             <option value="300">5 minutos</option>
+                            <option value="600">10 minutos</option>
                             <option value="900">15 minutos</option>
                             <option value="1800">30 minutos</option>
                             <option value="3600">1 hora</option>
+                            <option value="7200">2 horas</option>
+                            <option value="14400">4 horas</option>
+                            <option value="28800">8 horas</option>
+                            <option value="86400">24 horas</option>
                         </select>
                     </div>
                 </div>
@@ -1263,16 +1317,63 @@
             simulated: false,
             accountType: 'demo'
         };
+        
+        // Estado persistente da aplicação
+        let appState = {
+            isConnected: false,
+            currentAccountType: 'demo',
+            lastConnectionTime: null,
+            tradingPanelVisible: false,
+            currentSection: 'home'
+        };
 
         // Inicialização
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 Inicializando aplicação Zeus...');
             console.log('🌐 API Base URL:', API_BASE_URL);
             
+            // Carregar tokens salvos
+            loadSavedTokens();
+            
+            // Carregar estado da aplicação
+            loadAppState();
+            
             initializeSocket();
             checkAuthStatus();
             initializeCharts();
             setupEventListeners();
+            
+            // Restaurar estado da aplicação
+            restoreAppState();
+            
+            // Event listener para navegação
+            window.addEventListener('hashchange', function() {
+                const hash = window.location.hash.substring(1);
+                console.log('🔄 Navegação para:', hash);
+                
+                // Salvar seção atual
+                appState.currentSection = hash;
+                saveAppState();
+                
+                if (hash === 'trading' && currentUser) {
+                    setTimeout(async () => {
+                        if (await checkTokensRegistered()) {
+                            // Tokens já cadastrados, mostrar tela de trading conectado
+                            document.getElementById('tradingPanel').style.display = 'block';
+                            document.getElementById('resultsPanel').style.display = 'block';
+                            
+                            // Salvar estado do painel
+                            appState.tradingPanelVisible = true;
+                            saveAppState();
+                            
+                            loadTokensInDashboard();
+                        } else {
+                            // Primeiro acesso, mostrar formulário de cadastro
+                            document.getElementById('tokenRegistrationPanel').style.display = 'block';
+                        }
+                    }, 100);
+                }
+            });
             
             // Verificar se os elementos existem
             console.log('🔍 Verificando elementos do DOM...');
@@ -1830,6 +1931,45 @@
             }
         }
         
+        // Salvar estado da aplicação
+        function saveAppState() {
+            localStorage.setItem('zeus_app_state', JSON.stringify(appState));
+            console.log('💾 Estado da aplicação salvo:', appState);
+        }
+        
+        // Carregar estado da aplicação
+        function loadAppState() {
+            const savedState = localStorage.getItem('zeus_app_state');
+            if (savedState) {
+                appState = { ...appState, ...JSON.parse(savedState) };
+                console.log('📁 Estado da aplicação carregado:', appState);
+            }
+        }
+        
+        // Restaurar estado da aplicação
+        function restoreAppState() {
+            loadAppState();
+            
+            // Restaurar seção atual
+            if (appState.currentSection && appState.currentSection !== 'home') {
+                window.location.hash = '#' + appState.currentSection;
+            }
+            
+            // Restaurar painel de trading se estava visível
+            if (appState.tradingPanelVisible && currentUser) {
+                document.getElementById('tradingPanel').style.display = 'block';
+                document.getElementById('resultsPanel').style.display = 'block';
+            }
+            
+            // Restaurar tipo de conta
+            if (appState.currentAccountType) {
+                const toggle = document.getElementById('accountTypeToggle');
+                if (toggle) {
+                    toggle.checked = appState.currentAccountType === 'real';
+                }
+            }
+        }
+        
         // Salvar tokens
         function saveTokens() {
             localStorage.setItem('deriv_tokens', JSON.stringify(savedTokens));
@@ -1926,6 +2066,13 @@
                         tradingData.status = 'connected';
                         tradingData.simulated = data.simulated || false;
                         tradingData.accountType = accountType;
+                        
+                        // Atualizar estado da aplicação
+                        appState.isConnected = true;
+                        appState.currentAccountType = accountType;
+                        appState.lastConnectionTime = new Date().toISOString();
+                        saveAppState();
+                        
                         updateTradingDisplay();
                         
                         showNotification(`✅ Conectado à conta ${accountType.toUpperCase()}! Saldo: ${data.balance} ${data.currency}`, 'success');
@@ -2031,13 +2178,32 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    isTrading = true;
-                    tradingData.status = 'trading';
+                    console.log('✅ Trade executado com sucesso!');
+                    console.log('📊 Dados recebidos:', data);
+                    
+                    // Atualizar saldo se fornecido
+                    if (data.balance !== undefined) {
+                        tradingData.balance = data.balance;
+                        tradingData.currency = data.currency || tradingData.currency;
+                        console.log('💰 Saldo atualizado no frontend:', data.balance, data.currency);
+                    } else {
+                        console.log('⚠️ Saldo não fornecido na resposta');
+                    }
+                    
+                    // Manter status como 'connected' para não quebrar a interface
+                    tradingData.status = 'connected';
                     updateTradingDisplay();
-                    startBtn.disabled = true;
-                    stopBtn.disabled = false;
+                    
+                    // Adicionar trade à tabela se disponível
+                    if (data.trade) {
+                        addTradeToTable(data.trade);
+                        // Atualizar gráficos com dados reais
+                        updateCharts(data.trade);
+                    }
+                    
                     showNotification('Trade executado com sucesso!', 'success');
                 } else {
+                    console.log('❌ Trade falhou:', data.message);
                     showNotification(data.message, 'error');
                 }
             } catch (error) {
@@ -2133,6 +2299,30 @@
             
             // Atualizar trades hoje
             document.getElementById('tradesToday').textContent = tradingData.tradesToday;
+            
+            // Atualizar indicador de status no header
+            updateConnectionStatus();
+        }
+        
+        // Atualizar indicador de status de conexão
+        function updateConnectionStatus() {
+            const statusElement = document.getElementById('connectionStatus');
+            const indicatorElement = document.getElementById('statusIndicator');
+            const textElement = document.getElementById('statusText');
+            
+            if (statusElement && indicatorElement && textElement) {
+                if (tradingData.status === 'connected') {
+                    statusElement.style.display = 'flex';
+                    indicatorElement.className = 'status-indicator connected';
+                    textElement.textContent = `${tradingData.accountType.toUpperCase()} - ${tradingData.balance} ${tradingData.currency}`;
+                } else if (tradingData.status === 'connecting') {
+                    statusElement.style.display = 'flex';
+                    indicatorElement.className = 'status-indicator connecting';
+                    textElement.textContent = 'Conectando...';
+                } else {
+                    statusElement.style.display = 'none';
+                }
+            }
         }
 
         function updateBalance(balance) {
@@ -2150,20 +2340,26 @@
         // Adicionar trade à tabela
         function addTradeToTable(trade) {
             const tbody = document.getElementById('tradesList');
+            if (!tbody) {
+                console.log('❌ Tabela de trades não encontrada');
+                return;
+            }
+            
             const row = document.createElement('tr');
             
-            const resultClass = trade.result === 'win' ? 'positive' : 'negative';
-            const resultText = trade.result === 'win' ? 'Ganhou' : 'Perdeu';
+            // Usar dados reais do trade da Deriv
+            const resultClass = 'pending'; // Trade ainda não finalizado
+            const resultText = 'Pendente';
             
             const formattedAmount = new Intl.NumberFormat('pt-BR', {
                 style: 'currency',
-                currency: 'BRL'
+                currency: trade.currency || 'USD'
             }).format(trade.amount);
             
             row.innerHTML = `
-                <td>${new Date(trade.timestamp).toLocaleTimeString()}</td>
+                <td>${new Date(trade.tradeTime).toLocaleTimeString()}</td>
                 <td>${trade.asset}</td>
-                <td>${trade.direction}</td>
+                <td>${trade.contractType}</td>
                 <td>${formattedAmount}</td>
                 <td class="${resultClass}">${resultText}</td>
             `;
@@ -2174,6 +2370,8 @@
             while (tbody.children.length > 20) {
                 tbody.removeChild(tbody.lastChild);
             }
+            
+            console.log('✅ Trade adicionado à tabela:', trade);
         }
 
         // Gráficos
@@ -2224,7 +2422,12 @@
         }
 
         function updateCharts(tradeData) {
-            // Atualizar gráfico de saldo
+            if (!balanceChart) {
+                console.log('❌ Gráfico de saldo não inicializado');
+                return;
+            }
+            
+            // Atualizar gráfico de saldo com dados reais
             const now = new Date().toLocaleTimeString();
             balanceChart.data.labels.push(now);
             balanceChart.data.datasets[0].data.push(tradingData.balance);
@@ -2236,12 +2439,30 @@
             }
             
             balanceChart.update();
+            console.log('📊 Gráfico de saldo atualizado:', tradingData.balance);
 
-            // Atualizar gráfico de resultados (simulado)
-            const wins = Math.floor(Math.random() * 10) + 5;
-            const losses = Math.floor(Math.random() * 5) + 2;
-            resultsChart.data.datasets[0].data = [wins, losses];
-            resultsChart.update();
+            // Atualizar gráfico de resultados com dados reais
+            if (resultsChart) {
+                // Contar trades reais da tabela
+                const tbody = document.getElementById('tradesList');
+                if (tbody) {
+                    const rows = tbody.children;
+                    let wins = 0;
+                    let losses = 0;
+                    
+                    for (let i = 0; i < rows.length; i++) {
+                        const resultCell = rows[i].cells[4];
+                        if (resultCell) {
+                            if (resultCell.textContent === 'Ganhou') wins++;
+                            else if (resultCell.textContent === 'Perdeu') losses++;
+                        }
+                    }
+                    
+                    resultsChart.data.datasets[0].data = [wins, losses];
+                    resultsChart.update();
+                    console.log('📊 Gráfico de resultados atualizado:', { wins, losses });
+                }
+            }
         }
 
         // Notificações
@@ -2289,89 +2510,100 @@
         setTimeout(startDataSimulation, 1000);
 
         // Atualizar opções de ativos baseado no tipo de trade
-        function updateAssetOptions() {
+        async function updateAssetOptions() {
             const tradeType = document.getElementById('tradeTypeSelect').value;
             const assetSelect = document.getElementById('assetSelect');
             
             // Limpar opções existentes
-            assetSelect.innerHTML = '';
-            
-            let assets = [];
-            
-            switch(tradeType) {
-                case 'binary':
-                    assets = [
-                        { value: 'R_10', text: 'Rise/Fall (10 ticks)' },
-                        { value: 'R_25', text: 'Higher/Lower (25 ticks)' },
-                        { value: 'R_50', text: 'Touch/No Touch (50 ticks)' },
-                        { value: 'R_100', text: 'In/Out (100 ticks)' },
-                        { value: 'R_500', text: 'Digits (500 ticks)' }
-                    ];
-                    break;
-                case 'digital':
-                    assets = [
-                        { value: '1HZ100V', text: 'Volatility 100 (1s)' },
-                        { value: '1HZ150V', text: 'Volatility 150 (1s)' },
-                        { value: '1HZ200V', text: 'Volatility 200 (1s)' },
-                        { value: '1HZ250V', text: 'Volatility 250 (1s)' },
-                        { value: '1HZ300V', text: 'Volatility 300 (1s)' }
-                    ];
-                    break;
-                case 'forex':
-                    assets = [
-                        { value: 'frxAUDUSD', text: 'AUD/USD' },
+            assetSelect.innerHTML = '<option value="">Carregando pares...</option>';
+
+            if (tradeType === 'forex') {
+                try {
+                    console.log('🔍 Buscando pares forex disponíveis...');
+                    const response = await fetch(`${API_BASE_URL}/deriv/forex-pairs`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('zeus_token')}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        console.log('✅ Pares forex recebidos:', data.pairs);
+                        
+                        // Limpar opções de carregamento
+                        assetSelect.innerHTML = '';
+                        
+                        // Adicionar pares forex
+                        data.pairs.forEach(pair => {
+                            const option = document.createElement('option');
+                            option.value = pair;
+                            // Converter frxEURUSD para EUR/USD
+                            const displayName = pair.replace('frx', '').replace(/([A-Z]{3})([A-Z]{3})/, '$1/$2');
+                            option.textContent = displayName;
+                            assetSelect.appendChild(option);
+                        });
+                        
+                        showNotification(`✅ ${data.pairs.length} pares forex carregados`, 'success');
+                    } else {
+                        throw new Error('Erro ao buscar pares forex');
+                    }
+                } catch (error) {
+                    console.error('❌ Erro ao buscar pares forex:', error);
+                    
+                    // Fallback para pares padrão
+                    assetSelect.innerHTML = '';
+                    const fallbackPairs = [
                         { value: 'frxEURUSD', text: 'EUR/USD' },
                         { value: 'frxGBPUSD', text: 'GBP/USD' },
                         { value: 'frxUSDJPY', text: 'USD/JPY' },
+                        { value: 'frxAUDUSD', text: 'AUD/USD' },
                         { value: 'frxUSDCAD', text: 'USD/CAD' },
                         { value: 'frxUSDCHF', text: 'USD/CHF' },
                         { value: 'frxNZDUSD', text: 'NZD/USD' }
                     ];
-                    break;
-                case 'synthetic':
-                    assets = [
-                        { value: '1HZ10V', text: 'Volatility 10 (1s)' },
-                        { value: '1HZ25V', text: 'Volatility 25 (1s)' },
-                        { value: '1HZ50V', text: 'Volatility 50 (1s)' },
-                        { value: '1HZ75V', text: 'Volatility 75 (1s)' },
-                        { value: '1HZ100V', text: 'Volatility 100 (1s)' }
-                    ];
-                    break;
-                case 'crypto':
-                    assets = [
-                        { value: 'cryBTCUSD', text: 'BTC/USD' },
-                        { value: 'cryETHUSD', text: 'ETH/USD' },
-                        { value: 'cryLTCUSD', text: 'LTC/USD' },
-                        { value: 'cryXRPUSD', text: 'XRP/USD' },
-                        { value: 'cryADAUSD', text: 'ADA/USD' },
-                        { value: 'cryDOTUSD', text: 'DOT/USD' }
-                    ];
-                    break;
-                case 'commodities':
-                    assets = [
-                        { value: 'frxGOLD', text: 'Ouro' },
-                        { value: 'frxSILVER', text: 'Prata' },
-                        { value: 'frxOIL', text: 'Petróleo' },
-                        { value: 'frxGAS', text: 'Gás Natural' }
-                    ];
-                    break;
-                case 'indices':
-                    assets = [
-                        { value: 'R_50', text: 'Volatility 50' },
-                        { value: 'R_75', text: 'Volatility 75' },
-                        { value: 'R_100', text: 'Volatility 100' },
-                        { value: 'R_150', text: 'Volatility 150' },
-                        { value: 'R_200', text: 'Volatility 200' }
-                    ];
-                    break;
+                    
+                    fallbackPairs.forEach(pair => {
+                        const option = document.createElement('option');
+                        option.value = pair.value;
+                        option.textContent = pair.text;
+                        assetSelect.appendChild(option);
+                    });
+                    
+                    showNotification('⚠️ Usando pares padrão (erro na conexão)', 'warning');
+                }
             }
             
-            // Adicionar opções ao select
-            assets.forEach(asset => {
+            // Atualizar durações baseado no tipo de trade
+            updateDurationOptions(tradeType);
+        }
+        
+        // Atualizar opções de duração baseado no tipo de trade
+        function updateDurationOptions(tradeType) {
+            const durationSelect = document.getElementById('durationSelect');
+            
+            // Limpar opções existentes
+            durationSelect.innerHTML = '';
+            
+            // Durações para forex (mínimo 5 minutos)
+            const durations = [
+                { value: 300, text: '5 minutos' },
+                { value: 600, text: '10 minutos' },
+                { value: 900, text: '15 minutos' },
+                { value: 1800, text: '30 minutos' },
+                { value: 3600, text: '1 hora' },
+                { value: 7200, text: '2 horas' },
+                { value: 14400, text: '4 horas' },
+                { value: 28800, text: '8 horas' },
+                { value: 86400, text: '24 horas' }
+            ];
+            
+            // Adicionar opções
+            durations.forEach(duration => {
                 const option = document.createElement('option');
-                option.value = asset.value;
-                option.textContent = asset.text;
-                assetSelect.appendChild(option);
+                option.value = duration.value;
+                option.textContent = duration.text;
+                durationSelect.appendChild(option);
             });
         }
 
